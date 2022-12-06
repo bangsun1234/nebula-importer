@@ -12,15 +12,22 @@ import (
 	"time"
 
 	"github.com/vesoft-inc/nebula-importer/pkg/base"
+	"github.com/vesoft-inc/nebula-importer/pkg/cipher"
 	ierrors "github.com/vesoft-inc/nebula-importer/pkg/errors"
 	"github.com/vesoft-inc/nebula-importer/pkg/logger"
 	yaml "gopkg.in/yaml.v2"
 )
 
+type Encrypt struct {
+	Enable    *bool   `json:"enable" yaml:"enable"`
+	SecretKey *string `json:"secretKey" yaml:"secretKey"`
+}
+
 type NebulaClientConnection struct {
-	User     *string `json:"user" yaml:"user"`
-	Password *string `json:"password" yaml:"password"`
-	Address  *string `json:"address" yaml:"address"`
+	User     *string  `json:"user" yaml:"user"`
+	Password *string  `json:"password" yaml:"password"`
+	Address  *string  `json:"address" yaml:"address"`
+	Encrypt  *Encrypt `json:"encrypt" yaml:"encrypt"`
 }
 
 type NebulaPostStart struct {
@@ -294,6 +301,20 @@ func (c *NebulaClientConnection) validateAndReset(prefix string, runnerLogger *l
 	if c.Password == nil {
 		c.Password = &kDefaultPassword
 		runnerLogger.Warnf("%s.password: %s", prefix, *c.Password)
+	}
+
+	if c.Encrypt != nil {
+		defaultEnable := false
+		enc := c.Encrypt
+		if enc.Enable == nil {
+			enc.Enable = &defaultEnable
+		}
+		if *enc.Enable {
+			if enc.SecretKey == nil {
+				return fmt.Errorf("Please configure the secretKey")
+			}
+			*c.Password = cipher.Aes256Decrypt(*c.Password, *enc.SecretKey)
+		}
 	}
 	return nil
 }
