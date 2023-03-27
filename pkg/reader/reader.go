@@ -30,6 +30,7 @@ type FileReader struct {
 	localFile    bool
 	cleanup      bool
 	WithHeader   bool
+	WithFields   bool
 	DataReader   DataFileReader
 	Concurrency  int
 	BatchMgr     *BatchMgr
@@ -47,6 +48,7 @@ func New(fileIdx int, file *config.File, cleanup bool, clientRequestChs []chan b
 			DataReader:   &r,
 			File:         file,
 			WithHeader:   *file.CSV.WithHeader,
+			WithFields:   *file.CSV.WithFields,
 			StopFlag:     false,
 			cleanup:      cleanup,
 			runnerLogger: runnerLogger,
@@ -137,7 +139,7 @@ func (r *FileReader) Read() (numErrorLines int64, err error) {
 
 	lineNum := 0
 
-	if !r.WithHeader {
+	if !r.WithHeader && !r.WithFields {
 		r.startLog()
 	}
 
@@ -150,6 +152,11 @@ func (r *FileReader) Read() (numErrorLines int64, err error) {
 		lineNum++
 
 		if err == nil {
+			if data.Type == base.FIELD {
+				err = r.BatchMgr.InitFieldSchema(data.Record, r.runnerLogger)
+				r.startLog()
+				continue
+			}
 			if data.Type == base.HEADER {
 				err = r.BatchMgr.InitSchema(data.Record, r.runnerLogger)
 				r.startLog()

@@ -73,6 +73,14 @@ func (r *CSVReader) ReadLine() (base.Data, error) {
 	n := r.rr.remainingBytes - r.br.Buffered()
 	r.rr.remainingBytes -= n
 
+	if *r.CSVConfig.WithFields && r.lineNum == 1 {
+		if *r.CSVConfig.WithLabel {
+			return base.FieldsData(line[1:], n), nil
+		} else {
+			return base.FieldsData(line, n), nil
+		}
+	}
+
 	if *r.CSVConfig.WithHeader && r.lineNum == 1 {
 		if *r.CSVConfig.WithLabel {
 			return base.HeaderData(line[1:], n), nil

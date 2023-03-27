@@ -51,6 +51,7 @@ type Prop struct {
 	Name               *string `json:"name" yaml:"name"`
 	Type               *string `json:"type" yaml:"type"`
 	Index              *int    `json:"index" yaml:"index"`
+	Field              *string `json:"field" yaml:"field"`
 	Nullable           bool    `json:"nullable" yaml:"nullable"`
 	NullValue          string  `json:"nullValue" yaml:"nullValue"`
 	AlternativeIndices []int   `json:"alternativeIndices" yaml:"alternativeIndices"`
@@ -60,6 +61,7 @@ type Prop struct {
 
 type VID struct {
 	Index       *int          `json:"index" yaml:"index"`
+	Field       *string       `json:"field" yaml:"field"`
 	ConcatItems []interface{} `json:"concatItems" yaml:"concatItems"` // only string and int is support, int is for Index
 	Function    *string       `json:"function" yaml:"function"`
 	Type        *string       `json:"type" yaml:"type"`
@@ -68,7 +70,8 @@ type VID struct {
 }
 
 type Rank struct {
-	Index *int `json:"index" yaml:"index"`
+	Index *int    `json:"index" yaml:"index"`
+	Field *string `json:"field" yaml:"field"`
 }
 
 type Edge struct {
@@ -97,6 +100,7 @@ type Schema struct {
 }
 
 type CSVConfig struct {
+	WithFields *bool   `json:"withFields" yaml:"withFields"`
 	WithHeader *bool   `json:"withHeader" yaml:"withHeader"`
 	WithLabel  *bool   `json:"withLabel" yaml:"withLabel"`
 	Delimiter  *string `json:"delimiter" yaml:"delimiter"`
@@ -433,6 +437,12 @@ func (f *File) expandFiles(dir string) ([]*File, error) {
 }
 
 func (c *CSVConfig) validateAndReset(prefix string) error {
+	if c.WithFields == nil {
+		g := false
+		c.WithFields = &g
+		logger.Log.Infof("%s.withFields: %v", prefix, false)
+	}
+
 	if c.WithHeader == nil {
 		h := false
 		c.WithHeader = &h
@@ -573,6 +583,10 @@ func (v *VID) validateAndReset(prefix string, defaultVal int) error {
 	if *v.Index < 0 {
 		return fmt.Errorf("Invalid %s.index: %d", prefix, *v.Index)
 	}
+
+	if v.Field == nil {
+		return fmt.Errorf("Invalid %s.field: null", prefix)
+	}
 	if err := v.checkFunction(prefix); err != nil {
 		return err
 	}
@@ -663,7 +677,7 @@ func (e *Edge) FormatValues(record base.Record) (string, error) {
 		}
 	}
 	rank := ""
-	if e.Rank != nil && e.Rank.Index != nil {
+	if *e.WithRanking {
 		rank = fmt.Sprintf("@%s", record[*e.Rank.Index])
 	}
 	srcVID, err := e.SrcVID.FormatValue(record)
@@ -931,6 +945,9 @@ func (p *Prop) validateAndReset(prefix string, val int) error {
 		if *p.Index < 0 {
 			return fmt.Errorf("Invalid prop index: %d, name: %s, type: %s", *p.Index, *p.Name, *p.Type)
 		}
+	}
+	if p.Field == nil {
+		return fmt.Errorf("Invalid prop field: null, name: %s, type: %s", *p.Name, *p.Type)
 	}
 	return p.InitPicker()
 }

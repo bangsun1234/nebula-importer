@@ -13,6 +13,7 @@ const (
 	DONE   OpType = 0
 	INSERT OpType = 1
 	DELETE OpType = 2
+	FIELD  OpType = 99
 	HEADER OpType = 100
 )
 
@@ -24,6 +25,8 @@ func (op OpType) String() string {
 		return "INSERT"
 	case 2:
 		return "DELETE"
+	case 99:
+		return "FIELD"
 	case 100:
 		return "HEADER"
 	default:
@@ -48,6 +51,14 @@ func InsertData(record Record, bytes int) Data {
 func DeleteData(record Record, bytes int) Data {
 	return Data{
 		Type:   DELETE,
+		Record: record,
+		Bytes:  bytes,
+	}
+}
+
+func FieldsData(record Record, bytes int) Data {
+	return Data{
+		Type:   FIELD,
 		Record: record,
 		Bytes:  bytes,
 	}

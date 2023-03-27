@@ -41,6 +41,54 @@ func (bm *BatchMgr) Done() {
 	}
 }
 
+func (bm *BatchMgr) InitFieldSchema(header base.Record, runnerLogger *logger.RunnerLogger) (err error) {
+	if bm.initializedSchema {
+		logger.Log.Info("Batch manager schema has been initialized!")
+		return
+	}
+	bm.initializedSchema = true
+	for i, hh := range header {
+		switch c := hh; {
+		case bm.Schema.Vertex != nil && c == *bm.Schema.Vertex.VID.Field:
+			*bm.Schema.Vertex.VID.Index = i
+			_ = bm.Schema.Vertex.VID.InitPicker()
+		case bm.Schema.Edge != nil && c == *bm.Schema.Edge.SrcVID.Field:
+			*bm.Schema.Edge.SrcVID.Index = i
+			_ = bm.Schema.Edge.SrcVID.InitPicker()
+		case bm.Schema.Edge != nil && c == *bm.Schema.Edge.DstVID.Field:
+			*bm.Schema.Edge.DstVID.Index = i
+			_ = bm.Schema.Edge.DstVID.InitPicker()
+		case bm.Schema.Edge != nil && *bm.Schema.Edge.WithRanking && c == *bm.Schema.Edge.Rank.Field:
+			*bm.Schema.Edge.Rank.Index = i
+		default:
+			if bm.Schema.IsVertex() {
+				for tag := range bm.Schema.Vertex.Tags {
+					for prop := range bm.Schema.Vertex.Tags[tag].Props {
+						if c == *bm.Schema.Vertex.Tags[tag].Props[prop].Field {
+							*bm.Schema.Vertex.Tags[tag].Props[prop].Index = i
+							_ = bm.Schema.Vertex.Tags[tag].Props[prop].InitPicker()
+						}
+					}
+				}
+			} else {
+				for prop := range bm.Schema.Edge.Props {
+					if c == *bm.Schema.Edge.Props[prop].Field {
+						*bm.Schema.Edge.Props[prop].Index = i
+						_ = bm.Schema.Edge.Props[prop].InitPicker()
+					}
+				}
+			}
+		}
+	}
+
+	// for _, tagName := range bm.emptyPropsTagNames {
+	// 	bm.getOrCreateVertexTagByName(tagName)
+	// }
+
+	bm.generateInsertStmtPrefix()
+	return
+}
+
 func (bm *BatchMgr) InitSchema(header base.Record, runnerLogger *logger.RunnerLogger) (err error) {
 	if bm.initializedSchema {
 		logger.Log.Info("Batch manager schema has been initialized!")
