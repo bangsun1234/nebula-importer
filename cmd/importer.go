@@ -55,7 +55,7 @@ func main() {
 		}
 	}
 
-	runnerLogger := logger.NewRunnerLogger("")
+	// runnerLogger := logger.NewRunnerLogger("")
 	if port != nil && *port > 0 && callback != nil && *callback != "" {
 		// Start http server
 		svr := &web.WebServer{

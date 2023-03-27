@@ -29,10 +29,11 @@ type Encrypt struct {
 }
 
 type NebulaClientConnection struct {
-	User     *string  `json:"user" yaml:"user"`
-	Password *string  `json:"password" yaml:"password"`
-	Address  *string  `json:"address" yaml:"address"`
-	Encrypt  *Encrypt `json:"encrypt" yaml:"encrypt"`
+	User      *string  `json:"user" yaml:"user"`
+	Password  *string  `json:"password" yaml:"password"`
+	Address   *string  `json:"address" yaml:"address"`
+	Encrypt   *Encrypt `json:"encrypt" yaml:"encrypt"`
+	IsEncrypt *bool    `json:"isEncrypt" yaml:"isEncrypt"`
 }
 
 type NebulaPostStart struct {
@@ -159,7 +160,7 @@ func UpdateParse(filename string, yamlConf *YAMLConfig, runnerLogger *logger.Run
 		return ierrors.Wrap(ierrors.InvalidConfigPathOrFormat, err)
 	}
 	path := filepath.Dir(abs)
-	if err = yamlConf.ValidateAndReset(path, runnerLogger); err != nil {
+	if err = yamlConf.ValidateAndReset(path); err != nil {
 		return ierrors.Wrap(ierrors.ConfigError, err)
 	}
 
@@ -341,8 +342,17 @@ func (c *NebulaClientConnection) validateAndReset(prefix string) error {
 			if enc.SecretKey == nil {
 				return fmt.Errorf("Please configure the secretKey")
 			}
-			*c.Password = cipher.Aes256Decrypt(*c.Password, *enc.SecretKey)
+			if c.IsEncrypt == nil {
+				isEncrypt := false
+				c.IsEncrypt = &isEncrypt
+			}
+			if !*c.IsEncrypt {
+				*c.Password = cipher.Aes256Decrypt(*c.Password, *enc.SecretKey)
+				*c.IsEncrypt = true
+			}
+
 		}
+
 	}
 	return nil
 }
@@ -454,10 +464,10 @@ func (f *File) expandFiles(dir string) ([]*File, error) {
 		for i := range fileNames {
 			var failedDataPath *string = nil
 			if f.FailDataPath != nil {
-				base := filepath.Base(fileNames[i])
-				tmp := filepath.Join(*f.FailDataPath, base)
-				failedDataPath = &tmp
-				logger.Log.Infof("Failed data path: %v", *failedDataPath)
+				// base := filepath.Base(fileNames[i])
+				// tmp := filepath.Join(*f.FailDataPath, base)
+				// failedDataPath = &tmp
+				logger.Log.Infof("Failed data path: %v", f.FailDataPath)
 			}
 			eachConf := *f
 			eachConf.Path = &fileNames[i]
