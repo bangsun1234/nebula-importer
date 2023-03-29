@@ -467,7 +467,8 @@ func (f *File) expandFiles(dir string) ([]*File, error) {
 				// base := filepath.Base(fileNames[i])
 				// tmp := filepath.Join(*f.FailDataPath, base)
 				// failedDataPath = &tmp
-				logger.Log.Infof("Failed data path: %v", f.FailDataPath)
+				failedDataPath = f.FailDataPath
+				logger.Log.Infof("Failed data path: %v", *failedDataPath)
 			}
 			eachConf := *f
 			eachConf.Path = &fileNames[i]
@@ -623,14 +624,14 @@ func (v *VID) checkFunction(prefix string) error {
 func (v *VID) validateAndReset(prefix string, defaultVal int) error {
 	if v.Index == nil {
 		v.Index = &defaultVal
+		if v.Field == nil {
+			return fmt.Errorf("Invalid %s.field: null", prefix)
+		}
 	}
 	if *v.Index < 0 {
 		return fmt.Errorf("Invalid %s.index: %d", prefix, *v.Index)
 	}
 
-	if v.Field == nil {
-		return fmt.Errorf("Invalid %s.field: null", prefix)
-	}
 	if err := v.checkFunction(prefix); err != nil {
 		return err
 	}
@@ -985,13 +986,13 @@ func (p *Prop) validateAndReset(prefix string, val int) error {
 	}
 	if p.Index == nil {
 		p.Index = &val
+		if p.Field == nil {
+			return fmt.Errorf("Invalid prop field: null, name: %s, type: %s", *p.Name, *p.Type)
+		}
 	} else {
 		if *p.Index < 0 {
 			return fmt.Errorf("Invalid prop index: %d, name: %s, type: %s", *p.Index, *p.Name, *p.Type)
 		}
-	}
-	if p.Field == nil {
-		return fmt.Errorf("Invalid prop field: null, name: %s, type: %s", *p.Name, *p.Type)
 	}
 	return p.InitPicker()
 }

@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/vesoft-inc/nebula-importer/pkg/cipher"
+	"github.com/vesoft-inc/nebula-importer/v3/pkg/cipher"
 )
 
 var secret = flag.String("secret", "", "param for secret")
