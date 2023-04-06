@@ -853,6 +853,9 @@ func (p *Prop) FormatValue(record base.Record) (string, error) {
 		return fmt.Sprintf("%q", r), nil
 	}
 	if p.IsDateOrTimeType() {
+		if len(r) == 0 {
+			return fmt.Sprintf("%s", "NULL"), nil
+		}
 		return fmt.Sprintf("%s(%q)", strings.ToLower(*p.Type), r), nil
 	}
 	// Only support wkt for geography currently
