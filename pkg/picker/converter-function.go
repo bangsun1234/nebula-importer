@@ -1,6 +1,9 @@
 package picker
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 var (
 	_ Converter = FunctionConverter{}
@@ -27,5 +30,8 @@ func (fc FunctionStringConverter) Convert(v *Value) (*Value, error) {
 }
 
 func getFuncValue(name, value string) string {
+	if strings.EqualFold(value, "\"\"") {
+		return "NULL"
+	}
 	return name + "(" + value + ")"
 }
