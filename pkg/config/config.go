@@ -634,7 +634,10 @@ func (e *Edge) FormatValues(record base.Record) (string, error) {
 	}
 	rank := ""
 	if e.Rank != nil && e.Rank.Index != nil {
-		rank = fmt.Sprintf("@%s", record[*e.Rank.Index])
+		rank = record[*e.Rank.Index]
+		if len(rank) > 0 {
+			rank = fmt.Sprintf("@%s", record[*e.Rank.Index])
+		}
 	}
 	srcVID, err := e.SrcVID.FormatValue(record)
 	if err != nil {
@@ -844,6 +847,15 @@ func (p *Prop) IsGeographyType() bool {
 	return t == "geography" || t == "geography(point)" || t == "geography(linestring)" || t == "geography(polygon)"
 }
 
+func (p *Prop) IsIntegerType() bool {
+	t := strings.ToLower(*p.Type)
+	return t == "int" || t == "int64" || t == "int32" || t == "int16" || t == "int8" || t == "float" || t == "double"
+}
+func (p *Prop) IsBooleanType() bool {
+	t := strings.ToLower(*p.Type)
+	return t == "bool" || t == "boolean"
+}
+
 func (p *Prop) FormatValue(record base.Record) (string, error) {
 	if p.Index != nil && *p.Index >= len(record) {
 		return "", fmt.Errorf("Prop index %d out range %d of record(%v)", *p.Index, len(record), record)
@@ -861,6 +873,16 @@ func (p *Prop) FormatValue(record base.Record) (string, error) {
 	// Only support wkt for geography currently
 	if p.IsGeographyType() {
 		return fmt.Sprintf("ST_GeogFromText(%q)", r), nil
+	}
+	if p.IsIntegerType() {
+		if len(r) == 0 {
+			return fmt.Sprintf("%s", "NULL"), nil
+		}
+	}
+	if p.IsBooleanType() {
+		if len(r) == 0 {
+			return fmt.Sprintf("%s", "NULL"), nil
+		}
 	}
 
 	return r, nil
