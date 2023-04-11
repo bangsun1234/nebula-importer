@@ -723,7 +723,10 @@ func (e *Edge) FormatValues(record base.Record) (string, error) {
 	}
 	rank := ""
 	if *e.WithRanking {
-		rank = fmt.Sprintf("@%s", record[*e.Rank.Index])
+		rank = record[*e.Rank.Index]
+		if len(rank) > 0 {
+			rank = fmt.Sprintf("@%s", record[*e.Rank.Index])
+		}
 	}
 	srcVID, err := e.SrcVID.FormatValue(record)
 	if err != nil {
@@ -942,6 +945,9 @@ func (p *Prop) FormatValue(record base.Record) (string, error) {
 	value, err := p.picker.Pick(record)
 	if err != nil {
 		return "", err
+	}
+	if len(value.Val) == 0 {
+		return "NULL", nil
 	}
 	return value.Val, nil
 }
