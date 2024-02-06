@@ -2,7 +2,6 @@ package reader
 
 import (
 	"fmt"
-
 	"github.com/vesoft-inc/nebula-importer/v3/pkg/base"
 )
 
@@ -62,6 +61,8 @@ func (b *Batch) requestClient() {
 	if err != nil {
 		stmt = fmt.Sprintf("%s(%s)", "THERE_ARE_SOME_ERRORS", err.Error())
 	}
+
+	//logger.Log.Infof(fmt.Sprintf("%s", stmt))
 
 	b.clientRequestCh <- base.ClientRequest{
 		Stmt:  stmt,

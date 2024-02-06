@@ -14,24 +14,40 @@ import (
 type BatchMgr struct {
 	Schema             *config.Schema
 	Batches            []*Batch
+	Model              string
 	InsertStmtPrefix   string
 	initializedSchema  bool
 	emptyPropsTagNames []string
 	runnerLogger       *logger.RunnerLogger
 }
 
-func NewBatchMgr(schema *config.Schema, batchSize int, clientRequestChs []chan base.ClientRequest, errCh chan<- base.ErrData) *BatchMgr {
+func NewBatchMgr(schema *config.Schema, batchSize int, model string, clientRequestChs []chan base.ClientRequest, errCh chan<- base.ErrData) *BatchMgr {
 	bm := BatchMgr{
 		Schema:             schema,
 		Batches:            make([]*Batch, len(clientRequestChs)),
+		Model:              model,
 		initializedSchema:  false,
 		emptyPropsTagNames: schema.CollectEmptyPropsTagNames(),
+	}
+
+	if strings.ToUpper(model) == "UPSERT" {
+		if schema.IsVertex() {
+			if batchSize > 128 {
+				batchSize = 128
+				logger.Log.Info(fmt.Sprintf("Schema Tag is [%s], The operate model is [%s], Reset batchSize to 128", *schema.Vertex.Tags[0].Name, model))
+			}
+		} else {
+			if batchSize > 128 {
+				batchSize = 128
+				logger.Log.Info(fmt.Sprintf("Schema Edge is [%s], The operate model is [%s], Reset batchSize to 128", *schema.Edge.Name, model))
+			}
+		}
 	}
 
 	for i := range bm.Batches {
 		bm.Batches[i] = NewBatch(&bm, batchSize, clientRequestChs[i], errCh)
 	}
-	bm.generateInsertStmtPrefix()
+	bm.generateInsertStmtPrefix(model)
 	return &bm
 }
 
@@ -85,7 +101,7 @@ func (bm *BatchMgr) InitFieldSchema(header base.Record, runnerLogger *logger.Run
 	// 	bm.getOrCreateVertexTagByName(tagName)
 	// }
 
-	bm.generateInsertStmtPrefix()
+	bm.generateInsertStmtPrefix(bm.Model)
 	return
 }
 
@@ -134,7 +150,7 @@ func (bm *BatchMgr) InitSchema(header base.Record, runnerLogger *logger.RunnerLo
 		bm.getOrCreateVertexTagByName(tagName)
 	}
 
-	bm.generateInsertStmtPrefix()
+	bm.generateInsertStmtPrefix(bm.Model)
 	return
 }
 
@@ -170,10 +186,20 @@ func (bm *BatchMgr) addEdgeProps(r string, i int) {
 	bm.Schema.Edge.Props = append(bm.Schema.Edge.Props, &p)
 }
 
-func (bm *BatchMgr) generateInsertStmtPrefix() {
+func (bm *BatchMgr) generateInsertStmtPrefix(model string) {
 	var builder strings.Builder
 	if bm.Schema.IsVertex() {
-		builder.WriteString("INSERT VERTEX ")
+		if strings.ToUpper(model) == "UPSERT" {
+			builder.WriteString("UPSERT VERTEX ON ")
+			builder.WriteString(fmt.Sprintf("%s ", *bm.Schema.Vertex.Tags[0].Name))
+			bm.InsertStmtPrefix = builder.String()
+			return
+		}
+		if strings.ToUpper(model) == "INSERT IF NOT EXISTS" {
+			builder.WriteString("INSERT VERTEX IF NOT EXISTS ")
+		} else {
+			builder.WriteString("INSERT VERTEX ")
+		}
 		for i, tag := range bm.Schema.Vertex.Tags {
 			builder.WriteString(fmt.Sprintf("`%s`(%s)", *tag.Name, bm.GeneratePropsString(tag.Props)))
 			if i < len(bm.Schema.Vertex.Tags)-1 {
@@ -183,7 +209,18 @@ func (bm *BatchMgr) generateInsertStmtPrefix() {
 		builder.WriteString(" VALUES ")
 	} else {
 		edge := bm.Schema.Edge
-		builder.WriteString(fmt.Sprintf("INSERT EDGE `%s`(%s) VALUES ", *edge.Name, bm.GeneratePropsString(edge.Props)))
+		if strings.ToUpper(model) == "UPSERT" {
+			builder.WriteString("UPSERT EDGE ON ")
+			builder.WriteString(fmt.Sprintf("%s ", *edge.Name))
+			bm.InsertStmtPrefix = builder.String()
+			return
+		}
+		if strings.ToUpper(model) == "INSERT IF NOT EXISTS" {
+			builder.WriteString("INSERT EDGE IF NOT EXISTS ")
+		} else {
+			builder.WriteString("INSERT EDGE ")
+		}
+		builder.WriteString(fmt.Sprintf("`%s`(%s) VALUES ", *edge.Name, bm.GeneratePropsString(edge.Props)))
 	}
 	bm.InsertStmtPrefix = builder.String()
 }
@@ -303,18 +340,35 @@ func (m *BatchMgr) makeVertexBatchStmt(batch []base.Data) (string, error) {
 
 func (m *BatchMgr) makeVertexInsertStmt(data []base.Data) (string, error) {
 	var builder strings.Builder
-	builder.WriteString(m.InsertStmtPrefix)
-	batchSize := len(data)
-	for i := 0; i < batchSize; i++ {
-		str, err := m.Schema.Vertex.FormatValues(data[i].Record)
-		if err != nil {
-			return "", err
+	if strings.ToUpper(m.Model) == "UPSERT" {
+		batchSize := len(data)
+		for i := 0; i < batchSize; i++ {
+			str, isVid, err := m.Schema.Vertex.UpsertFormatValues(data[i].Record)
+			if err != nil {
+				return "", err
+			}
+			if isVid {
+				builder.WriteString(fmt.Sprintf("INSERT VERTEX IF NOT EXISTS %s() VALUES %s:();", *m.Schema.Vertex.Tags[0].Name, str))
+			} else {
+				builder.WriteString(m.InsertStmtPrefix)
+				builder.WriteString(str)
+				builder.WriteString(";")
+			}
 		}
-		builder.WriteString(str)
-		if i < batchSize-1 {
-			builder.WriteString(",")
-		} else {
-			builder.WriteString(";")
+	} else {
+		builder.WriteString(m.InsertStmtPrefix)
+		batchSize := len(data)
+		for i := 0; i < batchSize; i++ {
+			str, err := m.Schema.Vertex.FormatValues(data[i].Record)
+			if err != nil {
+				return "", err
+			}
+			builder.WriteString(str)
+			if i < batchSize-1 {
+				builder.WriteString(",")
+			} else {
+				builder.WriteString(";")
+			}
 		}
 	}
 
@@ -351,18 +405,35 @@ func (m *BatchMgr) makeEdgeBatchStmt(batch []base.Data) (string, error) {
 
 func (m *BatchMgr) makeEdgeInsertStmt(batch []base.Data) (string, error) {
 	var builder strings.Builder
-	builder.WriteString(m.InsertStmtPrefix)
-	batchSize := len(batch)
-	for i := 0; i < batchSize; i++ {
-		str, err := m.Schema.Edge.FormatValues(batch[i].Record)
-		if err != nil {
-			return "", err
+	if strings.ToUpper(m.Model) == "UPSERT" {
+		batchSize := len(batch)
+		for i := 0; i < batchSize; i++ {
+			str, isEid, err := m.Schema.Edge.UpsertFormatValues(batch[i].Record)
+			if err != nil {
+				return "", err
+			}
+			if isEid {
+				builder.WriteString(fmt.Sprintf("INSERT EDGE IF NOT EXISTS %s() VALUES %s:();", *m.Schema.Edge.Name, str))
+			} else {
+				builder.WriteString(m.InsertStmtPrefix)
+				builder.WriteString(str)
+				builder.WriteString(";")
+			}
 		}
-		builder.WriteString(str)
-		if i < batchSize-1 {
-			builder.WriteString(",")
-		} else {
-			builder.WriteString(";")
+	} else {
+		builder.WriteString(m.InsertStmtPrefix)
+		batchSize := len(batch)
+		for i := 0; i < batchSize; i++ {
+			str, err := m.Schema.Edge.FormatValues(batch[i].Record)
+			if err != nil {
+				return "", err
+			}
+			builder.WriteString(str)
+			if i < batchSize-1 {
+				builder.WriteString(",")
+			} else {
+				builder.WriteString(";")
+			}
 		}
 	}
 	return builder.String(), nil

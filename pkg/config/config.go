@@ -122,6 +122,7 @@ type File struct {
 	Limit        *int       `json:"limit" yaml:"limit"`
 	InOrder      *bool      `json:"inOrder" yaml:"inOrder"`
 	Type         *string    `json:"type" yaml:"type"`
+	Model        *string    `json:"model" yaml:"model"`
 	CSV          *CSVConfig `json:"csv" yaml:"csv"`
 	Schema       *Schema    `json:"schema" yaml:"schema"`
 }
@@ -416,6 +417,11 @@ func (f *File) validateAndReset(dir, prefix string) error {
 	if f.InOrder == nil {
 		inOrder := false
 		f.InOrder = &inOrder
+	}
+
+	if f.Model == nil || (strings.ToUpper(*f.Model) != "INSERT IF NOT EXISTS" && strings.ToUpper(*f.Model) != "UPSERT") {
+		model := "INSERT"
+		f.Model = &model
 	}
 
 	if strings.ToLower(*f.Type) != "csv" {
@@ -739,6 +745,38 @@ func (e *Edge) FormatValues(record base.Record) (string, error) {
 	return fmt.Sprintf(" %s->%s%s:(%s) ", srcVID, dstVID, rank, strings.Join(cells, ",")), nil
 }
 
+func (e *Edge) UpsertFormatValues(record base.Record) (string, bool, error) {
+	var cells []string
+	for i, prop := range e.Props {
+		if c, err := prop.FormatValue(record); err != nil {
+			return "", false, fmt.Errorf("edge: %s, column: %d, error: %v", e.String(), i, err)
+		} else {
+			if c != "NULL" && c != "\"\"" {
+				cells = append(cells, fmt.Sprintf("%s = %s", *prop.Name, c))
+			}
+		}
+	}
+	rank := ""
+	if *e.WithRanking {
+		rank = record[*e.Rank.Index]
+		if len(rank) > 0 {
+			rank = fmt.Sprintf("@%s", record[*e.Rank.Index])
+		}
+	}
+	srcVID, err := e.SrcVID.FormatValue(record)
+	if err != nil {
+		return "", false, err
+	}
+	dstVID, err := e.DstVID.FormatValue(record)
+	if err != nil {
+		return "", false, err
+	}
+	if len(cells) == 0 {
+		return fmt.Sprintf("%s->%s%s", srcVID, dstVID, rank), true, nil
+	}
+	return fmt.Sprintf("%s->%s%s SET %s", srcVID, dstVID, rank, strings.Join(cells, ",")), false, nil
+}
+
 func (e *Edge) maxIndex() int {
 	maxIdx := 0
 	if e.SrcVID != nil && e.SrcVID.Index != nil && *e.SrcVID.Index > maxIdx {
@@ -856,6 +894,21 @@ func (v *Vertex) FormatValues(record base.Record) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf(" %s: (%s)", vid, strings.Join(cells, ",")), nil
+}
+
+func (v *Vertex) UpsertFormatValues(record base.Record) (string, bool, error) {
+	str, noProps, err := v.Tags[0].UpsertFormatValues(record)
+	if err != nil {
+		return "", false, err
+	}
+	vid, err := v.VID.FormatValue(record)
+	if err != nil {
+		return "", false, err
+	}
+	if noProps {
+		return vid, true, nil
+	}
+	return fmt.Sprintf("%s SET %s", vid, str), false, nil
 }
 
 func (v *Vertex) maxIndex() int {
@@ -1038,6 +1091,28 @@ func (t *Tag) FormatValues(record base.Record) (string, bool, error) {
 		} else {
 			cells = append(cells, c)
 		}
+	}
+	return strings.Join(cells, ","), noProps, nil
+}
+
+func (t *Tag) UpsertFormatValues(record base.Record) (string, bool, error) {
+	var cells []string
+	noProps := true
+	for _, p := range t.Props {
+		if p == nil {
+			continue
+		}
+		noProps = false
+		if c, err := p.FormatValue(record); err != nil {
+			return "", noProps, fmt.Errorf("tag: %v, error: %v", *t, err)
+		} else {
+			if c != "NULL" && c != "\"\"" {
+				cells = append(cells, fmt.Sprintf("%s = %s", *p.Name, c))
+			}
+		}
+	}
+	if len(cells) == 0 {
+		noProps = true
 	}
 	return strings.Join(cells, ","), noProps, nil
 }
