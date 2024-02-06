@@ -1,0 +1,80 @@
+conf:
+  batch: 500
+input:
+  filePath: "D://newFile8.txt"
+  delimiter: ","
+  isHeader: false
+output:
+  filePath: "D://nn.txt"
+  failPath: "D://err/n.txt"
+  delimiter: "&"
+handle:
+  transform:
+    - method: "ToUpper"
+      col: "c0"
+    - method: "ToLower"
+      col: "c1"
+    - method: "TrimSpace"
+      col: "c2"
+    - method: "JoinLeft"
+      col: "c0"
+      mode: 1
+      params:
+        - param: "start"
+    - method: "JoinRight"
+      col: "c1"
+      mode: 1
+      params:
+        - param: "end"
+    - method: "Replace"
+      col: "c0"
+      mode: 1
+      params:
+        - param: "a"
+        - param: "b"
+    - method: "UnixToTime"
+      col: "c5"
+      params:
+        - param: "yyyy-mm-dd hh:mm:ss"
+    - method: "TimeToUnix"
+      col: "c6"
+      params:
+        - param: "yyyy-mm-dd hh:mm:ss"
+    - method: "TimeToUnixMilli"
+      col: "c6"
+      mode: 1
+      params:
+        - param: "yyyy-mm-dd hh:mm:ss"
+    - method: "TimeToTime"
+      col: "c7"
+      params:
+        - param: "yyyy/mm/dd hh:mm:ss"
+        - param: "yyyy-mm-dd"
+  filterRow:
+#    - method: "GT"
+#      col: "c4"
+#      value: "5405"
+#    - method: "GTE"
+#      col: "c4"
+#      value: "5405"
+#    - method: "LT"
+#      col: "c4"
+#      value: "5405"
+#    - method: "LTE"
+#      col: "c4"
+#      value: "5405"
+#    - method: "EQ"
+#      col: "c1"
+#      value: "PHONE7"
+#    - method: "NEQ"
+#      col: "c1"
+#      value: "PHONE7"
+#    - method: "NEQ"
+#      col: "c4"
+#      value: "5405"
+  filterCol:
+#    - cutCol: "c0"
+#    - cutCol: "c1"
+#    - addCol: "FixedValue:0"
+#    - addCol: "RandomValue"
+#    - addCol: "CurrentTime"
